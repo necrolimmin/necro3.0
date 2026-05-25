@@ -1,0 +1,38 @@
+# Deps
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+.next/
+out/
+dist/
+build/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Volumes
+volumes/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Media
+/media/
+/hls/
+backend/media/
+backend/hls/
+backend/db.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
