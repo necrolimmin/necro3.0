@@ -57,6 +57,29 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
 }
+input,
+textarea {
+  caret-color: #a78bfa;
+}
+
+input::selection,
+textarea::selection {
+  background: rgba(124, 58, 237, 0.42);
+  color: #ffffff;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #a78bfa;
+  box-shadow: 0 0 0 1000px rgba(30, 28, 67, 0.96) inset;
+  border-color: rgba(139, 92, 246, 0.6);
+  transition: background-color 9999s ease-out;
+}
 
 /* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
