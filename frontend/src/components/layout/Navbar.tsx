@@ -1,18 +1,22 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
-import { Search, Bell, User, ChevronDown, Tv2, Film, Compass, Star, LayoutDashboard, LogOut, Menu, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Bell, User, ChevronDown, Tv2, Film, Compass, Sparkles, LayoutDashboard, LogOut, Menu, X, Bookmark, Heart, Clock, CheckCircle } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LanguageToggle } from '@/components/ui/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
+import { adminApi, mediaApi } from '@/lib/api'
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [userMenu, setUserMenu] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const router = useRouter()
   const pathname = usePathname()
@@ -42,8 +46,28 @@ export function Navbar() {
     { href: '/', label: t.home, icon: Compass },
     { href: '/browse/movies', label: t.movies, icon: Film },
     { href: '/browse/series', label: t.series, icon: Tv2 },
-    { href: '/browse/new', label: t.new, icon: Star },
+    { href: '/browse/anime', label: 'Anime', icon: Sparkles },
+    { href: '/my-list', label: 'My List', icon: Bookmark },
+    { href: '/favorites', label: 'Favorites', icon: Heart },
   ]
+
+  const { data: latestItems = [] } = useQuery({
+    queryKey: ['nav-latest-ready'],
+    queryFn: () => mediaApi.list({ sort: '-created_at', limit: 4 }).then(r => r.data.items),
+    enabled: !!user,
+  })
+
+  const { data: adminMedia = [] } = useQuery({
+    queryKey: ['nav-admin-media'],
+    queryFn: () => adminApi.media().then(r => r.data),
+    enabled: !!user && isAdmin(),
+    refetchInterval: !!user && isAdmin() ? 5000 : false,
+  })
+
+  const processingItems = adminMedia
+    .filter((item: any) => item.status === 'processing' || item.status === 'pending')
+    .slice(0, 3)
+  const notificationCount = processingItems.length || latestItems.length
 
   return (
     <>
@@ -57,11 +81,18 @@ export function Navbar() {
       >
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-lg shadow-purple-900/50">
-              <Tv2 size={16} className="text-white" />
+          <Link href="/" className="nova-brand flex items-center gap-2.5 shrink-0" aria-label="NovaStream home">
+            <div className="nova-logo-image" aria-hidden="true">
+              <Image
+                src="/novastream-icon.png"
+                alt=""
+                width={40}
+                height={40}
+                priority
+                className="h-full w-full object-cover"
+              />
             </div>
-            <span className="text-[17px] font-bold tracking-tight bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+            <span className="text-[17px] font-bold tracking-tight bg-gradient-to-r from-white via-white to-cyan-100/75 bg-clip-text text-transparent">
               Nova<span className="text-violet-400">Stream</span>
             </span>
           </Link>
@@ -106,10 +137,92 @@ export function Navbar() {
 
             <LanguageToggle />
 
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/8 transition-all relative">
-              <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-violet-500 rounded-full"></span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setNotificationsOpen(v => !v)
+                  setUserMenu(false)
+                }}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all relative ${
+                  notificationsOpen ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/8'
+                }`}
+                aria-label="Open notifications"
+              >
+                <Bell size={18} />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-violet-500 text-[10px] leading-4 text-white font-bold shadow-lg shadow-violet-900/40">
+                    {Math.min(notificationCount, 9)}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {notificationsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 top-full mt-2 w-80 glass-strong rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+                  >
+                    <div className="px-4 py-3 border-b border-white/8">
+                      <p className="font-semibold text-sm">Notifications</p>
+                      <p className="text-xs text-white/40">Processing updates and fresh releases</p>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto py-2">
+                      {processingItems.length > 0 && (
+                        <div className="px-2 pb-2">
+                          <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-yellow-300/70">Processing</p>
+                          {processingItems.map((item: any) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                setNotificationsOpen(false)
+                                router.push('/admin')
+                              }}
+                              className="w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/8 transition-all"
+                            >
+                              <span className="w-8 h-8 rounded-lg bg-yellow-400/12 text-yellow-300 flex items-center justify-center shrink-0">
+                                <Clock size={15} />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-white/85">{item.title}</span>
+                                <span className="text-xs text-white/40">Still processing video qualities</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="px-2">
+                        <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-emerald-300/70">Ready to watch</p>
+                        {latestItems.length > 0 ? latestItems.map((item: any) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setNotificationsOpen(false)
+                              router.push(`/media/${item.id}`)
+                            }}
+                            className="w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/8 transition-all"
+                          >
+                            <span className="w-8 h-8 rounded-lg bg-emerald-400/12 text-emerald-300 flex items-center justify-center shrink-0">
+                              <CheckCircle size={15} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-white/85">{item.title}</span>
+                              <span className="text-xs text-white/40">Added to the library</span>
+                            </span>
+                          </button>
+                        )) : (
+                          <div className="px-3 py-6 text-center text-sm text-white/40">No notifications yet.</div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* User Menu */}
             <div className="relative">

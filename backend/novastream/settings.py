@@ -1,4 +1,4 @@
-import os
+﻿import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -126,3 +126,7 @@ CSRF_TRUSTED_ORIGINS = env_list(
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", "")
+FFPROBE_PATH = os.getenv("FFPROBE_PATH", "")
+HLS_AUTO_TRANSCODE = os.getenv("HLS_AUTO_TRANSCODE", "1") == "1"

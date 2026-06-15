@@ -1,18 +1,22 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
-import { Play, Plus, Star, Clock, Calendar, Bookmark, Heart, ChevronDown, ChevronUp } from 'lucide-react'
+import { Play, Plus, Star, Clock, Calendar, Bookmark, Heart, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { mediaApi } from '@/lib/api'
+import { favoritesApi, mediaApi, watchlistApi } from '@/lib/api'
 import { Navbar } from '@/components/layout/Navbar'
 import { Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 export default function MediaDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const mediaId = params.id as string
+  const [saved, setSaved] = useState(false)
+  const [liked, setLiked] = useState(false)
   const [expandedSeason, setExpandedSeason] = useState<string | null>(null)
 
   const { data: media, isLoading } = useQuery({
@@ -20,6 +24,48 @@ export default function MediaDetailPage() {
     queryFn: () => mediaApi.get(mediaId).then(r => r.data),
   })
 
+  useEffect(() => {
+    setSaved(!!media?.in_watchlist)
+  }, [media?.in_watchlist])
+
+  useEffect(() => {
+    setLiked(!!media?.in_favorite)
+  }, [media?.in_favorite])
+
+  const refreshMediaQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['watchlist'] })
+    queryClient.invalidateQueries({ queryKey: ['favorites'] })
+    queryClient.invalidateQueries({ queryKey: ['featured'] })
+    queryClient.invalidateQueries({ queryKey: ['continue-watching'] })
+    queryClient.invalidateQueries({ queryKey: ['movies'] })
+    queryClient.invalidateQueries({ queryKey: ['latest'] })
+    queryClient.invalidateQueries({ queryKey: ['series'] })
+    queryClient.invalidateQueries({ queryKey: ['top-rated'] })
+    queryClient.invalidateQueries({ queryKey: ['browse'] })
+    queryClient.invalidateQueries({ queryKey: ['media', mediaId] })
+  }
+
+  const toggleWatchlist = useMutation({
+    mutationFn: async () => saved ? watchlistApi.remove(mediaId) : watchlistApi.add(mediaId),
+    onSuccess: () => {
+      const next = !saved
+      setSaved(next)
+      toast.success(next ? 'Added to My List' : 'Removed from My List')
+      refreshMediaQueries()
+    },
+    onError: () => toast.error('Could not update My List'),
+  })
+
+  const toggleFavorite = useMutation({
+    mutationFn: async () => liked ? favoritesApi.remove(mediaId) : favoritesApi.add(mediaId),
+    onSuccess: () => {
+      const next = !liked
+      setLiked(next)
+      toast.success(next ? 'Added to Favorites' : 'Removed from Favorites')
+      refreshMediaQueries()
+    },
+    onError: () => toast.error('Could not update Favorites'),
+  })
   if (isLoading) return (
     <div className="min-h-screen bg-[#030712] flex items-center justify-center">
       <Loader2 size={48} className="animate-spin text-violet-400" />
@@ -113,14 +159,20 @@ export default function MediaDetailPage() {
                 <Play size={18} className="fill-white" /> Play Now
               </motion.button>
 
-              <motion.button className="flex items-center gap-2 px-5 py-3 glass rounded-xl text-sm font-medium hover:bg-white/12 transition-all"
+              <motion.button
+                onClick={() => toggleWatchlist.mutate()}
+                disabled={toggleWatchlist.isPending}
+                className={`flex items-center gap-2 px-5 py-3 glass rounded-xl text-sm font-medium transition-all ${saved ? 'bg-violet-500/20 text-violet-100' : 'hover:bg-white/12'}`}
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Plus size={16} /> Watchlist
+                {saved ? <Check size={16} /> : <Plus size={16} />} {saved ? 'In My List' : 'Watchlist'}
               </motion.button>
 
-              <motion.button className="w-11 h-11 glass rounded-xl flex items-center justify-center hover:bg-white/12 transition-all"
+              <motion.button
+                onClick={() => toggleFavorite.mutate()}
+                disabled={toggleFavorite.isPending}
+                className={`w-11 h-11 glass rounded-xl flex items-center justify-center transition-all ${liked ? 'bg-rose-500/20 text-rose-100' : 'hover:bg-white/12 text-white/70'}`}
                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Heart size={18} className="text-white/70" />
+                <Heart size={18} className={liked ? 'fill-current' : ''} />
               </motion.button>
 
               <motion.button className="w-11 h-11 glass rounded-xl flex items-center justify-center hover:bg-white/12 transition-all"

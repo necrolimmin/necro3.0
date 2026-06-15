@@ -58,7 +58,7 @@ export default function RegisterPage() {
                 <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{label}</label>
                 <input type={type} value={(form as any)[key]} onChange={e => setForm({...form, [key]: e.target.value})} required
                   placeholder={placeholder}
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/60 focus:bg-white/10 transition-all" />
+                  className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-sm text-white caret-violet-300 selection:bg-violet-500/40 selection:text-white placeholder-white/30 outline-none focus:border-violet-500/60 focus:bg-white/10 transition-all" />
               </div>
             ))}
 
@@ -67,7 +67,7 @@ export default function RegisterPage() {
               <div className="relative">
                 <input type={showPass ? 'text' : 'password'} value={form.password} onChange={e => setForm({...form, password: e.target.value})} required
                   placeholder="Min. 8 characters"
-                  className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/60 focus:bg-white/10 transition-all" />
+                  className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white caret-violet-300 selection:bg-violet-500/40 selection:text-white placeholder-white/30 outline-none focus:border-violet-500/60 focus:bg-white/10 transition-all" />
                 <button type="button" onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}

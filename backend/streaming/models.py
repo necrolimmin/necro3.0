@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -76,6 +76,7 @@ class Media(models.Model):
     poster_position_x = models.PositiveSmallIntegerField(default=50)
     poster_position_y = models.PositiveSmallIntegerField(default=50)
     backdrop_url = models.URLField(max_length=500, blank=True, null=True)
+    backdrop = models.FileField(upload_to="backdrops/", blank=True, null=True)
     logo_url = models.URLField(max_length=500, blank=True, null=True)
     file = models.FileField(upload_to="uploads/", blank=True, null=True)
     hls_path = models.CharField(max_length=1000, blank=True, null=True)
@@ -160,3 +161,6 @@ class Favorite(models.Model):
     profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="favorites")
     media = models.ForeignKey(Media, on_delete=models.CASCADE)
     added_at = models.DateTimeField(auto_now_add=True)
+
+
+

@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { mediaApi } from '@/lib/api'
+import { favoritesApi, mediaApi, watchlistApi } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { Navbar } from '@/components/layout/Navbar'
 import { HeroBanner } from '@/components/media/HeroBanner'
@@ -31,12 +31,29 @@ export default function HomePage() {
     enabled: !!user,
   })
 
+  const { data: watchlist = [], isLoading: watchlistLoading } = useQuery({
+    queryKey: ['watchlist'],
+    queryFn: () => watchlistApi.list().then(r => r.data),
+    enabled: !!user,
+  })
+
+  const { data: favorites = [], isLoading: favoritesLoading } = useQuery({
+    queryKey: ['favorites'],
+    queryFn: () => favoritesApi.list().then(r => r.data),
+    enabled: !!user,
+  })
+
   const { data: movies, isLoading: moviesLoading } = useQuery({
     queryKey: ['movies'],
     queryFn: () => mediaApi.list({ type: 'movie', limit: 20 }).then(r => r.data.items),
     enabled: !!user,
   })
 
+  const { data: latest, isLoading: latestLoading } = useQuery({
+    queryKey: ['latest'],
+    queryFn: () => mediaApi.list({ sort: '-created_at', limit: 20 }).then(r => r.data.items),
+    enabled: !!user,
+  })
   const { data: series, isLoading: seriesLoading } = useQuery({
     queryKey: ['series'],
     queryFn: () => mediaApi.list({ type: 'series', limit: 20 }).then(r => r.data.items),
@@ -77,15 +94,29 @@ export default function HomePage() {
           </motion.div>
         )}
 
+        {watchlist.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <MediaRow title="My List" items={watchlist} loading={watchlistLoading} />
+          </motion.div>
+        )}
+
+        {favorites.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+            <MediaRow title="Favorites" items={favorites} loading={favoritesLoading} />
+          </motion.div>
+        )}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <MediaRow title="New Releases" items={latest || []} loading={latestLoading} />
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <MediaRow title={t.movies} items={movies || []} loading={moviesLoading} />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <MediaRow title={t.tvSeries} items={series || []} loading={seriesLoading} />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
           <MediaRow title={t.topRated} items={topRated || []} loading={trLoading} />
         </motion.div>
       </div>

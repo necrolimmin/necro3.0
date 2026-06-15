@@ -1,4 +1,4 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-cinema.bekhruz21.uz'
 
@@ -82,6 +82,20 @@ export const profilesApi = {
   delete: (id: string) => api.delete(`/profiles/${id}`),
 }
 
+// Favorites
+export const favoritesApi = {
+  list: () => api.get('/favorites/'),
+  status: (id: string) => api.get(`/favorites/${id}`),
+  add: (id: string) => api.post(`/favorites/${id}`),
+  remove: (id: string) => api.delete(`/favorites/${id}`),
+}
+// Watchlist
+export const watchlistApi = {
+  list: () => api.get('/watchlist/'),
+  status: (id: string) => api.get(`/watchlist/${id}`),
+  add: (id: string) => api.post(`/watchlist/${id}`),
+  remove: (id: string) => api.delete(`/watchlist/${id}`),
+}
 // Admin
 export const adminApi = {
   stats: () => api.get('/admin/stats'),
@@ -92,5 +106,12 @@ export const adminApi = {
     api.post(`/admin/media/${id}/update`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  addEpisode: (mediaId: string, formData: FormData, onProgress?: (p: number) => void) =>
+    api.post(`/admin/media/${mediaId}/episodes`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => onProgress && onProgress(Math.round((e.loaded * 100) / (e.total || 1))),
+    }),
+  deleteEpisode: (episodeId: string) => api.delete(`/admin/episodes/${episodeId}`),
   deleteMedia: (id: string) => api.delete(`/admin/media/${id}`),
 }
+

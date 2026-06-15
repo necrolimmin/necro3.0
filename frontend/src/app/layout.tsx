@@ -1,11 +1,22 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { QueryProvider } from '@/components/ui/QueryProvider'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
-  title: 'NovaStream — Premium Streaming',
+  title: 'NovaStream - Premium Streaming',
   description: 'Your premium self-hosted streaming platform',
+  icons: {
+    icon: '/novastream-icon.png',
+    shortcut: '/novastream-icon.png',
+    apple: '/novastream-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#030712',
 }
 
@@ -16,7 +27,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body className="bg-[#030712] text-white antialiased">
         <QueryProvider>
