@@ -2,6 +2,7 @@ import time
 
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
+from django.db.models import Q
 
 from streaming.models import Episode, Media
 from streaming.transcode import process_episode_hls, process_media_hls
@@ -27,13 +28,14 @@ class Command(BaseCommand):
         poll_interval = max(1.0, options["poll_interval"])
         process_once = options["once"]
 
+        missing_hls = Q(hls_path__isnull=True) | Q(hls_path="")
         recovered_media = Media.objects.filter(
+            missing_hls,
             status=Media.Status.PROCESSING,
-            hls_path__isnull=True,
         ).update(status=Media.Status.PENDING)
         recovered_episodes = Episode.objects.filter(
+            missing_hls,
             status=Media.Status.PROCESSING,
-            hls_path__isnull=True,
         ).update(status=Media.Status.PENDING)
         if recovered_media or recovered_episodes:
             self.stdout.write(
@@ -67,8 +69,8 @@ class Command(BaseCommand):
     def _next_job():
         media = (
             Media.objects.filter(
+                Q(hls_path__isnull=True) | Q(hls_path=""),
                 status=Media.Status.PENDING,
-                hls_path__isnull=True,
             )
             .exclude(file="")
             .order_by("created_at")
@@ -84,8 +86,8 @@ class Command(BaseCommand):
 
         episode = (
             Episode.objects.filter(
+                Q(hls_path__isnull=True) | Q(hls_path=""),
                 status=Media.Status.PENDING,
-                hls_path__isnull=True,
             )
             .exclude(file="")
             .order_by("season__media__created_at", "season__season_number", "episode_number")
