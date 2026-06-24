@@ -1,0 +1,19 @@
+[Unit]
+Description=NovaStream HLS transcode worker
+After=network.target cinema_back.service
+
+[Service]
+Type=simple
+User=root
+Group=www-data
+WorkingDirectory=/var/www/novastream/backend
+Environment="DJANGO_SETTINGS_MODULE=novastream.settings"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/var/www/novastream/backend/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/var/www/novastream/backend/venv/bin/python manage.py run_transcode_worker --poll-interval 5
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

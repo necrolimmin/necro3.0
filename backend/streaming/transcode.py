@@ -56,7 +56,14 @@ def available_variants(input_path):
         return HLS_VARIANTS
     source_width, source_height = dimensions
     variants = [variant for variant in HLS_VARIANTS if variant["height"] <= source_height]
-    variants = variants or [HLS_VARIANTS[0]]
+    if not variants:
+        height = max(2, source_height - (source_height % 2))
+        return [{
+            **HLS_VARIANTS[0],
+            "label": f"{height}p",
+            "height": height,
+            "width": max(2, source_width - (source_width % 2)),
+        }]
     prepared = []
     for variant in variants:
         width = round(source_width * (variant["height"] / source_height))

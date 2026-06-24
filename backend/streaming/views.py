@@ -2,7 +2,6 @@
 import hashlib
 import hmac
 import json
-import threading
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -16,7 +15,6 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Episode, Favorite, Genre, Media, Season, UserProfile, WatchProgress, Watchlist
 from .tmdb import apply_tmdb_metadata, search_tmdb
-from .transcode import process_episode_hls, process_media_hls
 
 User = get_user_model()
 
@@ -449,7 +447,7 @@ def upload_media(request):
         poster=poster,
         backdrop=backdrop,
         file_size=upload.size,
-        status=Media.Status.PROCESSING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
+        status=Media.Status.PENDING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
     )
     if tmdb_id:
         try:
@@ -458,8 +456,6 @@ def upload_media(request):
             pass
     if genres:
         media.genres.set(genres)
-    if settings.HLS_AUTO_TRANSCODE:
-        threading.Thread(target=process_media_hls, args=(media.id,), daemon=True).start()
     return response({"media_id": str(media.id), "message": "Upload received"}, 202)
 
 
@@ -762,10 +758,8 @@ def add_admin_episode(request, media_id):
         runtime=runtime,
         air_date=air_date,
         file=upload,
-        status=Media.Status.PROCESSING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
+        status=Media.Status.PENDING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
     )
-    if settings.HLS_AUTO_TRANSCODE:
-        threading.Thread(target=process_episode_hls, args=(episode.id,), daemon=True).start()
     return response({"episode": admin_episode_payload(episode), "message": "Episode uploaded"}, 201)
 
 

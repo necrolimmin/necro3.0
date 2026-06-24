@@ -8,7 +8,7 @@ import { motion } from 'framer-motion'
 import {
   Users, Film, Activity, TrendingUp, Upload, Trash2, ToggleLeft,
   ToggleRight, Search, Plus, ArrowLeft, Loader2, CheckCircle, Clock, XCircle,
-  BarChart2, Eye, Pencil, X, Save
+  BarChart2, Eye, Pencil, X, Save, RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import { useDropzone } from 'react-dropzone'
@@ -107,11 +107,13 @@ export default function AdminPage() {
 
   const { data: stats } = useQuery({ queryKey: ['admin-stats'], queryFn: () => adminApi.stats().then(r => r.data) })
   const { data: users = [] } = useQuery({ queryKey: ['admin-users'], queryFn: () => adminApi.users().then(r => r.data), enabled: tab === 'users' })
-  const { data: adminMedia = [] } = useQuery({
+  const { data: adminMedia = [], refetch: refetchAdminMedia, isFetching: adminMediaFetching } = useQuery({
     queryKey: ['admin-media'],
     queryFn: () => adminApi.media().then(r => r.data),
     enabled: tab === 'media',
     refetchInterval: tab === 'media' ? 5000 : false,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   })
 
   const toggleUser = useMutation({
@@ -206,13 +208,14 @@ export default function AdminPage() {
         runtime: uploadForm.runtime || undefined,
         rating: uploadForm.rating || undefined,
       }, setUploadProgress)
-      toast.success('Upload complete!')
+      toast.success('Upload complete. Processing started.')
       setSelectedFile(null)
       setSelectedPoster(null)
       setSelectedBackdrop(null)
       setUploadForm(emptyUploadForm)
       setUploadProgress(0)
       queryClient.invalidateQueries({ queryKey: ['admin-media'] })
+      setTab('media')
     } catch {
       toast.error('Upload failed')
     } finally {
@@ -410,6 +413,14 @@ export default function AdminPage() {
                   placeholder="Search media..."
                   className="w-full bg-white/[0.06] border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/50 transition-all" />
               </div>
+              <button
+                type="button"
+                onClick={() => refetchAdminMedia()}
+                className="h-10 w-10 rounded-xl border border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10] hover:text-white transition-all flex items-center justify-center"
+                title="Refresh media statuses"
+              >
+                <RefreshCw size={16} className={adminMediaFetching ? 'animate-spin' : ''} />
+              </button>
             </div>
 
             <div className="glass-card overflow-hidden">
