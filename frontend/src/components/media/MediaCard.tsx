@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, Clock, Film, Heart, Play, Plus, Star } from 'lucide-react'
+import { Clock, Film, Heart, Play, Star } from 'lucide-react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { favoritesApi, watchlistApi } from '@/lib/api'
+import { favoritesApi } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 interface MediaCardProps {
   id: string
@@ -21,7 +22,6 @@ interface MediaCardProps {
   genres?: string[]
   type: string
   watch_percentage?: number
-  in_watchlist?: boolean
   in_favorite?: boolean
   index?: number
 }
@@ -38,22 +38,20 @@ export function MediaCard({
   genres = [],
   type,
   watch_percentage,
-  in_watchlist = false,
   in_favorite = false,
   index = 0,
 }: MediaCardProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [saved, setSaved] = useState(in_watchlist)
   const [liked, setLiked] = useState(in_favorite)
+  const { t } = useLanguage()
   const releaseYear = release_date ? new Date(release_date).getFullYear() : null
   const primaryGenre = genres[0]
+  const typeLabel = type === 'movie' ? t.movie : type === 'series' ? t.series : type === 'documentary' ? t.documentary : type === 'anime' ? t.anime : type === 'cartoon' ? t.cartoons : type
 
-  useEffect(() => setSaved(in_watchlist), [in_watchlist])
   useEffect(() => setLiked(in_favorite), [in_favorite])
 
   const refreshMediaQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['watchlist'] })
     queryClient.invalidateQueries({ queryKey: ['favorites'] })
     queryClient.invalidateQueries({ queryKey: ['featured'] })
     queryClient.invalidateQueries({ queryKey: ['continue-watching'] })
@@ -65,26 +63,15 @@ export function MediaCard({
     queryClient.invalidateQueries({ queryKey: ['media', id] })
   }
 
-  const toggleWatchlist = useMutation({
-    mutationFn: async () => saved ? watchlistApi.remove(id) : watchlistApi.add(id),
-    onSuccess: () => {
-      const next = !saved
-      setSaved(next)
-      toast.success(next ? 'Added to My List' : 'Removed from My List')
-      refreshMediaQueries()
-    },
-    onError: () => toast.error('Could not update My List'),
-  })
-
   const toggleFavorite = useMutation({
     mutationFn: async () => liked ? favoritesApi.remove(id) : favoritesApi.add(id),
     onSuccess: () => {
       const next = !liked
       setLiked(next)
-      toast.success(next ? 'Added to Favorites' : 'Removed from Favorites')
+      toast.success(next ? t.addedToFavorites : t.removedFromFavorites)
       refreshMediaQueries()
     },
-    onError: () => toast.error('Could not update Favorites'),
+    onError: () => toast.error(t.favoriteUpdateFailed),
   })
 
   return (
@@ -136,12 +123,6 @@ export function MediaCard({
                   aria-label={liked ? `Remove ${title} from Favorites` : `Add ${title} to Favorites`}>
                   <Heart size={12} className={liked ? 'fill-current' : ''} />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); toggleWatchlist.mutate() }}
-                  disabled={toggleWatchlist.isPending}
-                  className={`w-7 h-7 glass rounded-full flex items-center justify-center transition-colors ${saved ? 'bg-violet-500/25 text-violet-200' : 'hover:bg-white/20'}`}
-                  aria-label={saved ? `Remove ${title} from My List` : `Add ${title} to My List`}>
-                  {saved ? <Check size={12} /> : <Plus size={12} />}
-                </button>
               </div>
             </div>
           </div>
@@ -154,7 +135,7 @@ export function MediaCard({
       <div className="mt-2 px-0.5">
         <p className="text-[13px] font-semibold text-white/82 truncate">{title}</p>
         <div className="mt-1 flex items-center gap-2 text-[11px] text-white/38">
-          <span className="capitalize">{type}</span>
+          <span>{typeLabel}</span>
           {releaseYear && <span>{releaseYear}</span>}
           {primaryGenre && <span className="truncate">{primaryGenre}</span>}
           {rating && <span>{rating.toFixed(1)} IMDb</span>}

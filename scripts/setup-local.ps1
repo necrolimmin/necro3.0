@@ -15,5 +15,5 @@ Set-Location "$Root\backend"
 & "$Root\.venv\Scripts\python.exe" manage.py migrate
 
 Write-Host "NovaStream Django backend is ready."
-Write-Host "Backend:  cd backend; ..\.venv\Scripts\python.exe manage.py runserver 8000"
-Write-Host "Frontend: cd frontend; npm install; npm run dev"
+Write-Host "Start the full local stack, including FFmpeg worker:"
+Write-Host "powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1"

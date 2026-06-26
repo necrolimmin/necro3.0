@@ -3,37 +3,35 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
-import { Play, Plus, Star, Clock, Calendar, Bookmark, Heart, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Play, Star, Clock, Calendar, Heart, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { favoritesApi, mediaApi, watchlistApi } from '@/lib/api'
+import { favoritesApi, mediaApi } from '@/lib/api'
 import { Navbar } from '@/components/layout/Navbar'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useLanguage } from '@/lib/i18n'
+import { EpisodePicker } from '@/components/media/EpisodePicker'
 
 export default function MediaDetailPage() {
   const params = useParams()
   const router = useRouter()
   const queryClient = useQueryClient()
   const mediaId = params.id as string
-  const [saved, setSaved] = useState(false)
   const [liked, setLiked] = useState(false)
+  const { t } = useLanguage()
   const [expandedSeason, setExpandedSeason] = useState<string | null>(null)
+  const [episodePickerOpen, setEpisodePickerOpen] = useState(false)
 
-  const { data: media, isLoading } = useQuery({
+  const { data: media, isLoading, isError } = useQuery({
     queryKey: ['media', mediaId],
     queryFn: () => mediaApi.get(mediaId).then(r => r.data),
   })
-
-  useEffect(() => {
-    setSaved(!!media?.in_watchlist)
-  }, [media?.in_watchlist])
 
   useEffect(() => {
     setLiked(!!media?.in_favorite)
   }, [media?.in_favorite])
 
   const refreshMediaQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['watchlist'] })
     queryClient.invalidateQueries({ queryKey: ['favorites'] })
     queryClient.invalidateQueries({ queryKey: ['featured'] })
     queryClient.invalidateQueries({ queryKey: ['continue-watching'] })
@@ -45,33 +43,33 @@ export default function MediaDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['media', mediaId] })
   }
 
-  const toggleWatchlist = useMutation({
-    mutationFn: async () => saved ? watchlistApi.remove(mediaId) : watchlistApi.add(mediaId),
-    onSuccess: () => {
-      const next = !saved
-      setSaved(next)
-      toast.success(next ? 'Added to My List' : 'Removed from My List')
-      refreshMediaQueries()
-    },
-    onError: () => toast.error('Could not update My List'),
-  })
-
   const toggleFavorite = useMutation({
     mutationFn: async () => liked ? favoritesApi.remove(mediaId) : favoritesApi.add(mediaId),
     onSuccess: () => {
       const next = !liked
       setLiked(next)
-      toast.success(next ? 'Added to Favorites' : 'Removed from Favorites')
+      toast.success(next ? t.addedToFavorites : t.removedFromFavorites)
       refreshMediaQueries()
     },
-    onError: () => toast.error('Could not update Favorites'),
+    onError: () => toast.error(t.favoriteUpdateFailed),
   })
   if (isLoading) return (
     <div className="min-h-screen bg-[#030712] flex items-center justify-center">
       <Loader2 size={48} className="animate-spin text-violet-400" />
     </div>
   )
-  if (!media) return null
+  if (isError || !media) return (
+    <div className="min-h-screen bg-[#030712]">
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <AlertCircle size={48} className="text-rose-400" />
+        <p className="text-lg text-white/75">{t.loadMediaError}</p>
+        <button onClick={() => router.push('/')} className="btn-nova">
+          {t.backHome}
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#030712]">
@@ -152,19 +150,17 @@ export default function MediaDetailPage() {
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-3">
               <motion.button
-                onClick={() => router.push(`/watch/${mediaId}`)}
+                onClick={() => {
+                  if (media.playback_mode === 'episodic') {
+                    setEpisodePickerOpen(true)
+                  } else {
+                    router.push(`/watch/${mediaId}`)
+                  }
+                }}
                 className="btn-nova flex items-center gap-2.5"
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               >
-                <Play size={18} className="fill-white" /> Play Now
-              </motion.button>
-
-              <motion.button
-                onClick={() => toggleWatchlist.mutate()}
-                disabled={toggleWatchlist.isPending}
-                className={`flex items-center gap-2 px-5 py-3 glass rounded-xl text-sm font-medium transition-all ${saved ? 'bg-violet-500/20 text-violet-100' : 'hover:bg-white/12'}`}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                {saved ? <Check size={16} /> : <Plus size={16} />} {saved ? 'In My List' : 'Watchlist'}
+                <Play size={18} className="fill-white" /> {t.playNow}
               </motion.button>
 
               <motion.button
@@ -175,19 +171,15 @@ export default function MediaDetailPage() {
                 <Heart size={18} className={liked ? 'fill-current' : ''} />
               </motion.button>
 
-              <motion.button className="w-11 h-11 glass rounded-xl flex items-center justify-center hover:bg-white/12 transition-all"
-                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Bookmark size={18} className="text-white/70" />
-              </motion.button>
             </div>
           </motion.div>
         </div>
 
         {/* Seasons & Episodes */}
-        {media.seasons && media.seasons.length > 0 && (
+        {media.playback_mode === 'episodic' && media.seasons && media.seasons.length > 0 && (
           <motion.div className="mt-16"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <h2 className="text-2xl font-bold mb-6">Episodes</h2>
+            <h2 className="text-2xl font-bold mb-6">{t.episodes}</h2>
             <div className="flex flex-col gap-3">
               {media.seasons.map((season: any) => (
                 <div key={season.id} className="glass-card overflow-hidden">
@@ -200,8 +192,8 @@ export default function MediaDetailPage() {
                         <Image src={season.poster_url} alt={season.name || ''} width={48} height={72} className="rounded-lg object-cover" />
                       )}
                       <div className="text-left">
-                        <p className="font-semibold">{season.name || `Season ${season.season_number}`}</p>
-                        <p className="text-sm text-white/50">{season.episodes?.length || 0} episodes</p>
+                        <p className="font-semibold">{season.name || `${t.season} ${season.season_number}`}</p>
+                        <p className="text-sm text-white/50">{season.episodes?.length || 0} {t.episodes.toLowerCase()}</p>
                       </div>
                     </div>
                     {expandedSeason === season.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -244,6 +236,13 @@ export default function MediaDetailPage() {
           </motion.div>
         )}
       </div>
+      {episodePickerOpen && (
+        <EpisodePicker
+          media={media}
+          onClose={() => setEpisodePickerOpen(false)}
+          onSelect={(episodeId) => router.push(`/watch/${mediaId}?episode=${episodeId}`)}
+        />
+      )}
     </div>
   )
 }

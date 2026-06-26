@@ -8,10 +8,12 @@ import { Navbar } from '@/components/layout/Navbar'
 import { MediaCard } from '@/components/media/MediaCard'
 import { Search, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useLanguage } from '@/lib/i18n'
 
 function SearchContent() {
   const params = useSearchParams()
   const q = params.get('q') || ''
+  const { t } = useLanguage()
 
   const { data, isLoading } = useQuery({
     queryKey: ['search', q],
@@ -24,11 +26,11 @@ function SearchContent() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center gap-3 mb-2">
           <Search size={20} className="text-violet-400" />
-          <h1 className="text-2xl font-bold">Search Results</h1>
+          <h1 className="text-2xl font-bold">{t.searchResults}</h1>
         </div>
 
         <p className="text-white/50 mb-10">
-          {q ? <>Showing results for "<span className="text-white">{q}</span>"</> : 'Enter a search term'}
+          {q ? <>{t.showingResults} "<span className="text-white">{q}</span>"</> : t.enterSearch}
         </p>
 
         {isLoading ? (
@@ -44,8 +46,8 @@ function SearchContent() {
         ) : q ? (
           <div className="text-center py-20">
             <Search size={48} className="mx-auto mb-4 text-white/20" />
-            <p className="text-white/50 text-lg">No results found for "{q}"</p>
-            <p className="text-white/30 text-sm mt-2">Try a different search term</p>
+            <p className="text-white/50 text-lg">{t.noResults}: "{q}"</p>
+            <p className="text-white/30 text-sm mt-2">{t.tryAnotherSearch}</p>
           </div>
         ) : null}
       </motion.div>

@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { favoritesApi, mediaApi, watchlistApi } from '@/lib/api'
+import { favoritesApi, mediaApi } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { Navbar } from '@/components/layout/Navbar'
 import { HeroBanner } from '@/components/media/HeroBanner'
@@ -31,12 +31,6 @@ export default function HomePage() {
     enabled: !!user,
   })
 
-  const { data: watchlist = [], isLoading: watchlistLoading } = useQuery({
-    queryKey: ['watchlist'],
-    queryFn: () => watchlistApi.list().then(r => r.data),
-    enabled: !!user,
-  })
-
   const { data: favorites = [], isLoading: favoritesLoading } = useQuery({
     queryKey: ['favorites'],
     queryFn: () => favoritesApi.list().then(r => r.data),
@@ -57,6 +51,11 @@ export default function HomePage() {
   const { data: series, isLoading: seriesLoading } = useQuery({
     queryKey: ['series'],
     queryFn: () => mediaApi.list({ type: 'series', limit: 20 }).then(r => r.data.items),
+    enabled: !!user,
+  })
+  const { data: cartoons, isLoading: cartoonsLoading } = useQuery({
+    queryKey: ['cartoons'],
+    queryFn: () => mediaApi.list({ type: 'cartoon', limit: 20 }).then(r => r.data.items),
     enabled: !!user,
   })
 
@@ -94,19 +93,13 @@ export default function HomePage() {
           </motion.div>
         )}
 
-        {watchlist.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <MediaRow title="My List" items={watchlist} loading={watchlistLoading} />
-          </motion.div>
-        )}
-
         {favorites.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-            <MediaRow title="Favorites" items={favorites} loading={favoritesLoading} />
+            <MediaRow title={t.favorites} items={favorites} loading={favoritesLoading} />
           </motion.div>
         )}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <MediaRow title="New Releases" items={latest || []} loading={latestLoading} />
+          <MediaRow title={t.newReleases} items={latest || []} loading={latestLoading} />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <MediaRow title={t.movies} items={movies || []} loading={moviesLoading} />
@@ -114,6 +107,9 @@ export default function HomePage() {
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <MediaRow title={t.tvSeries} items={series || []} loading={seriesLoading} />
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <MediaRow title={t.cartoons} items={cartoons || []} loading={cartoonsLoading} />
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>

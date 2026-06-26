@@ -8,6 +8,7 @@ import {
   Loader2, AlertCircle, Gauge, PictureInPicture2, RotateCcw, RotateCw
 } from 'lucide-react'
 import { mediaApi } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 type QualityOption = { label: string; level: number }
 
@@ -60,6 +61,7 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
   const [playbackRate, setPlaybackRate] = useState(1)
   const [skipHint, setSkipHint] = useState<SkipHint>(null)
   const [settingsTab, setSettingsTab] = useState<'quality' | 'speed'>('quality')
+  const { t } = useLanguage()
 
   const resetControlsTimer = useCallback(() => {
     setShowControls(true)
@@ -126,7 +128,7 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
             if (level?.height && !hls.autoLevelEnabled) setQuality(`${level.height}p`)
           })
           hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal) setError('Stream error. Please try again.')
+            if (data.fatal) setError(t.streamError)
           })
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = hlsUrl
@@ -137,7 +139,7 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
           setError('HLS not supported in this browser.')
         }
       } catch {
-        setError('Failed to load stream.')
+        setError(t.loadStreamError)
       }
     }
     loadStream()
@@ -312,14 +314,14 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
 
   const progress = duration ? (currentTime / duration) * 100 : 0
   const bufferedPct = duration ? (buffered / duration) * 100 : 0
-  const speedLabel = playbackRate === 1 ? 'Normal' : `${playbackRate}x`
+  const speedLabel = playbackRate === 1 ? t.normal : `${playbackRate}x`
 
   if (error) return (
     <div className="w-full aspect-video bg-black flex items-center justify-center rounded-2xl">
       <div className="text-center">
         <AlertCircle size={48} className="text-red-400 mx-auto mb-3" />
         <p className="text-white/70">{error}</p>
-        <button onClick={() => { setError(null); window.location.reload() }} className="mt-4 btn-nova text-sm px-4 py-2">Retry</button>
+        <button onClick={() => { setError(null); window.location.reload() }} className="mt-4 btn-nova text-sm px-4 py-2">{t.retry}</button>
       </div>
     </div>
   )
@@ -394,9 +396,9 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 px-3 md:px-6 pb-4 pt-20 bg-gradient-to-t from-black via-black/78 to-transparent">
-              <div data-player-control="true" className="mb-4 relative h-2 group/seek cursor-pointer rounded-full bg-white/16 hover:h-3 transition-all duration-200"
+              <div data-player-control="true" className="mb-4 relative h-2 group/seek cursor-pointer rounded-full bg-white/[0.12] hover:bg-white/30 hover:h-3 transition-all duration-200"
                 onClick={seek}>
-                <div className="absolute left-0 top-0 h-full rounded-full bg-white/24 transition-all" style={{ width: `${bufferedPct}%` }} />
+                <div className="absolute left-0 top-0 h-full rounded-full bg-white/25 transition-all group-hover/seek:bg-white/40" style={{ width: `${bufferedPct}%` }} />
                 <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400 transition-all" style={{ width: `${progress}%` }}>
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover/seek:opacity-100 transition-opacity" />
                 </div>
@@ -419,7 +421,7 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
                     </button>
                     <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume}
                       onChange={e => handleVolume(parseFloat(e.target.value))}
-                      className="w-24 accent-violet-500 cursor-pointer" />
+                      className="player-volume w-24 cursor-pointer" />
                   </div>
                   <span className="truncate text-xs md:text-sm text-white/75 tabular-nums">
                     {formatTime(currentTime)} / {formatTime(duration)}
@@ -437,8 +439,8 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
                         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
                           className="absolute bottom-full right-0 mb-3 w-52 overflow-hidden rounded-xl border border-white/12 bg-black/82 shadow-2xl backdrop-blur-2xl">
                           <div className="grid grid-cols-2 border-b border-white/10 p-1">
-                            <button onClick={() => setSettingsTab('quality')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${settingsTab === 'quality' ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'}`}>Quality</button>
-                            <button onClick={() => setSettingsTab('speed')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${settingsTab === 'speed' ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'}`}>Speed</button>
+                            <button onClick={() => setSettingsTab('quality')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${settingsTab === 'quality' ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'}`}>{t.quality}</button>
+                            <button onClick={() => setSettingsTab('speed')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${settingsTab === 'speed' ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'}`}>{t.speed}</button>
                           </div>
                           {settingsTab === 'quality' ? (
                             <div className="max-h-64 overflow-y-auto py-1">
@@ -455,7 +457,7 @@ export function VideoPlayer({ mediaId, episodeId, title, onBack, initialPosition
                               {SPEEDS.map(speed => (
                                 <button key={speed} onClick={() => handleSpeedChange(speed)}
                                   className={`flex w-full items-center justify-between px-4 py-2 text-sm hover:bg-white/10 transition-colors ${playbackRate === speed ? 'text-violet-300' : 'text-white/80'}`}>
-                                  <span>{speed === 1 ? 'Normal' : `${speed}x`}</span>
+                                  <span>{speed === 1 ? t.normal : `${speed}x`}</span>
                                   {playbackRate === speed && <span className="h-2 w-2 rounded-full bg-violet-400" />}
                                 </button>
                               ))}

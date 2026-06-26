@@ -7,10 +7,12 @@ import { motion } from 'framer-motion'
 import { authApi } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import toast from 'react-hot-toast'
+import { useLanguage } from '@/lib/i18n'
 
 export default function LoginPage() {
   const router = useRouter()
   const { setAuth } = useAuthStore()
+  const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -27,10 +29,10 @@ export default function LoginPage() {
         { id: payload.sub, email, username: email.split('@')[0], role: payload.role || 'user' },
         data.access_token, data.refresh_token
       )
-      toast.success('Welcome back!')
+      toast.success(t.loginSuccess)
       router.push('/')
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Invalid credentials')
+      toast.error(err?.response?.data?.detail || t.invalidCredentials)
     } finally {
       setLoading(false)
     }
@@ -65,12 +67,12 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="glass-card p-8">
-          <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
-          <p className="text-white/50 text-sm mb-8">Sign in to continue streaming</p>
+          <h1 className="text-2xl font-bold mb-1">{t.welcomeBack}</h1>
+          <p className="text-white/50 text-sm mb-8">{t.signInHint}</p>
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div>
-              <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Email</label>
+              <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.email}</label>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)} required
                 placeholder="you@example.com"
@@ -79,7 +81,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Password</label>
+              <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.password}</label>
               <div className="relative">
                 <input
                   type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
@@ -98,15 +100,15 @@ export default function LoginPage() {
               whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>
-                Sign In <ArrowRight size={16} />
+                {t.signIn} <ArrowRight size={16} />
               </>}
             </motion.button>
           </form>
 
           <p className="text-center text-sm text-white/40 mt-6">
-            Don't have an account?{' '}
+            {t.noAccount}{' '}
             <Link href="/register" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
-              Create one
+              {t.createAccount}
             </Link>
           </p>
         </div>

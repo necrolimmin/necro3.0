@@ -154,13 +154,15 @@ def process_episode_hls(episode_id):
     episode = Episode.objects.select_related("season", "season__media").get(id=episode_id)
     if not episode.file:
         episode.status = Media.Status.ERROR
-        episode.save(update_fields=["status"])
+        episode.error_message = "Episode video file is missing."
+        episode.save(update_fields=["status", "error_message", "updated_at"])
         return
 
     ffmpeg = tool_path("ffmpeg", getattr(settings, "FFMPEG_PATH", ""))
     if not ffmpeg:
-        episode.status = Media.Status.READY
-        episode.save(update_fields=["status"])
+        episode.status = Media.Status.ERROR
+        episode.error_message = "FFmpeg is not available."
+        episode.save(update_fields=["status", "error_message", "updated_at"])
         return
 
     input_path = Path(episode.file.path)
@@ -170,7 +172,8 @@ def process_episode_hls(episode_id):
 
     try:
         episode.status = Media.Status.PROCESSING
-        episode.save(update_fields=["status"])
+        episode.error_message = None
+        episode.save(update_fields=["status", "error_message", "updated_at"])
 
         variants = available_variants(input_path)
         for variant in variants:
@@ -179,8 +182,14 @@ def process_episode_hls(episode_id):
 
         episode.hls_path = output_name
         episode.status = Media.Status.READY
-        episode.save(update_fields=["hls_path", "status"])
-    except Exception:
+        episode.error_message = None
+        episode.save(update_fields=["hls_path", "status", "error_message", "updated_at"])
+    except Exception as exc:
         logger.exception("Failed to process HLS for episode %s", episode_id)
         episode.status = Media.Status.ERROR
-        episode.save(update_fields=["status"])
+        if isinstance(exc, subprocess.CalledProcessError):
+            details = (exc.stderr or "").strip().splitlines()
+            episode.error_message = details[-1][:1000] if details else "FFmpeg processing failed."
+        else:
+            episode.error_message = str(exc)[:1000]
+        episode.save(update_fields=["status", "error_message", "updated_at"])

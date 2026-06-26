@@ -67,23 +67,6 @@ class Command(BaseCommand):
 
     @staticmethod
     def _next_job():
-        media = (
-            Media.objects.filter(
-                Q(hls_path__isnull=True) | Q(hls_path=""),
-                status=Media.Status.PENDING,
-            )
-            .exclude(file="")
-            .order_by("created_at")
-            .first()
-        )
-        if media:
-            claimed = Media.objects.filter(
-                id=media.id,
-                status=Media.Status.PENDING,
-            ).update(status=Media.Status.PROCESSING)
-            if claimed:
-                return "media", media.id, media.title
-
         episode = (
             Episode.objects.filter(
                 Q(hls_path__isnull=True) | Q(hls_path=""),
@@ -100,5 +83,22 @@ class Command(BaseCommand):
             ).update(status=Media.Status.PROCESSING)
             if claimed:
                 return "episode", episode.id, episode.title
+
+        media = (
+            Media.objects.filter(
+                Q(hls_path__isnull=True) | Q(hls_path=""),
+                status=Media.Status.PENDING,
+            )
+            .exclude(file="")
+            .order_by("created_at")
+            .first()
+        )
+        if media:
+            claimed = Media.objects.filter(
+                id=media.id,
+                status=Media.Status.PENDING,
+            ).update(status=Media.Status.PROCESSING)
+            if claimed:
+                return "media", media.id, media.title
 
         return None

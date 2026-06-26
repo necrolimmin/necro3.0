@@ -17,6 +17,7 @@ build/
 # Volumes
 volumes/
 *.log
+*.pid
 
 # Python
 __pycache__/

@@ -2,10 +2,12 @@
 import hashlib
 import hmac
 import json
+from pathlib import Path
 from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -86,6 +88,16 @@ def genre_items(raw):
         genre, _ = Genre.objects.get_or_create(slug=slug, defaults={"name": clean})
         items.append(genre)
     return items
+
+
+def normalize_playback_mode(media_type, raw_mode=None):
+    if media_type == Media.Type.SERIES:
+        return Media.PlaybackMode.EPISODIC
+    if media_type == Media.Type.ANIME:
+        return Media.PlaybackMode.EPISODIC if raw_mode == Media.PlaybackMode.EPISODIC else Media.PlaybackMode.STANDALONE
+    return Media.PlaybackMode.STANDALONE
+
+
 def method_allowed(request, methods):
     if request.method not in methods:
         return response({"detail": "Method not allowed"}, 405)
@@ -214,6 +226,13 @@ def absolute_media_backdrop_url(request, media):
 
 
 def admin_episode_payload(episode):
+    file_name = Path(episode.file.name).name if episode.file else None
+    file_size = None
+    if episode.file:
+        try:
+            file_size = episode.file.size
+        except OSError:
+            pass
     return {
         "id": str(episode.id),
         "season_id": str(episode.season_id),
@@ -226,7 +245,12 @@ def admin_episode_payload(episode):
         "thumbnail_url": episode.thumbnail_url,
         "status": episode.status,
         "has_file": bool(episode.file),
+        "file_name": file_name,
+        "file_size": file_size,
         "hls_path": episode.hls_path,
+        "error_message": episode.error_message,
+        "created_at": episode.created_at.isoformat() if episode.created_at else None,
+        "updated_at": episode.updated_at.isoformat() if episode.updated_at else None,
     }
 
 
@@ -237,6 +261,42 @@ def admin_season_payload(season):
         "name": season.name,
         "episodes": [admin_episode_payload(episode) for episode in season.episodes.all()],
     }
+
+
+def ensure_primary_episode(media):
+    if media.playback_mode != Media.PlaybackMode.EPISODIC or not media.file:
+        return None
+    season, _ = Season.objects.get_or_create(
+        media=media,
+        season_number=1,
+        defaults={"name": "Season 1"},
+    )
+    episode = season.episodes.filter(episode_number=1).first()
+    if episode:
+        changed = []
+        if not episode.file:
+            episode.file = media.file.name
+            changed.append("file")
+        if media.status == Media.Status.READY and media.hls_path and not episode.hls_path:
+            episode.hls_path = media.hls_path
+            episode.status = Media.Status.READY
+            episode.error_message = None
+            changed.extend(["hls_path", "status", "error_message"])
+        if changed:
+            episode.save(update_fields=changed + ["updated_at"])
+        return episode
+    return Episode.objects.create(
+        season=season,
+        episode_number=1,
+        title="Episode 1",
+        runtime=media.runtime,
+        air_date=media.release_date,
+        file=media.file.name,
+        hls_path=media.hls_path,
+        status=media.status if media.status in {Media.Status.PENDING, Media.Status.PROCESSING, Media.Status.READY} else Media.Status.PENDING,
+    )
+
+
 def media_payload(media, watch_percentage=None, request=None):
     in_watchlist = False
     in_favorite = False
@@ -250,6 +310,7 @@ def media_payload(media, watch_percentage=None, request=None):
         "id": str(media.id),
         "title": media.title,
         "type": media.type,
+        "playback_mode": media.playback_mode,
         "status": media.status,
         "description": media.description,
         "release_date": media.release_date.isoformat() if media.release_date else None,
@@ -367,6 +428,8 @@ def get_media(request, media_id):
     if denied := method_allowed(request, ["GET"]):
         return denied
     media = get_object_or_404(Media.objects.prefetch_related("genres", "seasons__episodes", "subtitles"), id=media_id)
+    ensure_primary_episode(media)
+    media = get_object_or_404(Media.objects.prefetch_related("genres", "seasons__episodes", "subtitles"), id=media_id)
     data = media_payload(media, request=request)
     data["seasons"] = [{
         "id": str(season.id),
@@ -381,6 +444,8 @@ def get_media(request, media_id):
             "runtime": ep.runtime,
             "thumbnail_url": ep.thumbnail_url,
             "duration": ep.duration,
+            "status": ep.status,
+            "error_message": ep.error_message,
         } for ep in season.episodes.all()],
     } for season in media.seasons.all()]
     data["subtitles"] = [{
@@ -398,14 +463,25 @@ def stream_media(request, media_id):
         return denied
     media = get_object_or_404(Media, id=media_id, status=Media.Status.READY)
     episode_id = request.GET.get("episode_id")
+    if media.type in {Media.Type.SERIES, Media.Type.ANIME} and not episode_id:
+        if media.playback_mode != Media.PlaybackMode.EPISODIC:
+            episode_id = None
+        else:
+            return response({"detail": "Choose an episode before playback"}, 400)
     if episode_id:
         episode = get_object_or_404(Episode, id=episode_id, season__media=media)
+        if episode.status != Media.Status.READY:
+            return response({
+                "detail": episode.error_message or f"Episode is {episode.status}",
+                "status": episode.status,
+            }, 409)
         if episode.hls_path:
             hls_url = request.build_absolute_uri(f"/hls/{episode.hls_path}/master.m3u8")
             return response({"hls_url": hls_url, "type": "episode", "qualities": ["auto", "480p", "720p", "1080p"]})
         if episode.file:
             url = request.build_absolute_uri(episode.file.url)
             return response({"hls_url": url, "url": url, "type": "episode"})
+        return response({"detail": "Episode stream not available"}, 404)
     if media.hls_path:
         hls_url = request.build_absolute_uri(f"/hls/{media.hls_path}/master.m3u8")
         return response({"hls_url": hls_url, "type": "movie", "qualities": ["auto", "480p", "720p", "1080p"]})
@@ -434,11 +510,13 @@ def upload_media(request):
     genres = genre_items(request_value(request, "genres"))
     if media_type not in dict(Media.Type.choices):
         media_type = Media.Type.MOVIE
+    playback_mode = normalize_playback_mode(media_type, request_value(request, "playback_mode"))
     if not upload or not title:
         return response({"detail": "file and title are required"}, 400)
     media = Media.objects.create(
         title=title.strip(),
         type=media_type,
+        playback_mode=playback_mode,
         description=(description or "").strip() or None,
         release_date=release_date,
         runtime=runtime,
@@ -456,6 +534,8 @@ def upload_media(request):
             pass
     if genres:
         media.genres.set(genres)
+    if playback_mode == Media.PlaybackMode.EPISODIC:
+        ensure_primary_episode(media)
     return response({"media_id": str(media.id), "message": "Upload received"}, 202)
 
 
@@ -468,8 +548,16 @@ def update_progress(request, media_id):
     position = float(request.GET.get("position") or data.get("position") or 0)
     duration_raw = request.GET.get("duration") or data.get("duration")
     duration = float(duration_raw) if duration_raw not in (None, "", "undefined") else None
+    episode_id = request.GET.get("episode_id") or data.get("episode_id")
+    episode = None
+    if episode_id:
+        episode = get_object_or_404(Episode, id=episode_id, season__media=media)
     percentage = (position / duration * 100) if duration else 0
-    progress, _ = WatchProgress.objects.get_or_create(user=request.nova_user, media=media)
+    progress, _ = WatchProgress.objects.get_or_create(
+        user=request.nova_user,
+        media=media,
+        episode=episode,
+    )
     progress.position = position
     progress.duration = duration
     progress.percentage = percentage
@@ -655,10 +743,14 @@ def admin_media(request):
     if denied := require_admin(request):
         return denied
     queryset = Media.objects.prefetch_related("genres", "seasons__episodes").order_by("-created_at")
+    for item in queryset:
+        ensure_primary_episode(item)
+    queryset = Media.objects.prefetch_related("genres", "seasons__episodes").order_by("-created_at")
     return response([{
         "id": str(item.id),
         "title": item.title,
         "type": item.type,
+        "playback_mode": item.playback_mode,
         "description": item.description,
         "status": item.status,
         "poster_url": absolute_media_poster_url(request, item),
@@ -692,6 +784,8 @@ def update_admin_media(request, media_id):
         media.title = title.strip() or media.title
     if media_type in dict(Media.Type.choices):
         media.type = media_type
+    if request.POST.get("playback_mode") is not None or media_type in dict(Media.Type.choices):
+        media.playback_mode = normalize_playback_mode(media.type, request.POST.get("playback_mode"))
     if description is not None:
         media.description = description.strip() or None
     if is_featured is not None:
@@ -713,6 +807,7 @@ def update_admin_media(request, media_id):
             "id": str(media.id),
             "title": media.title,
             "type": media.type,
+            "playback_mode": media.playback_mode,
             "description": media.description,
             "poster_url": absolute_media_poster_url(request, media),
             "poster_position_x": media.poster_position_x,
@@ -731,7 +826,7 @@ def add_admin_episode(request, media_id):
     if denied := require_admin(request):
         return denied
     media = get_object_or_404(Media, id=media_id)
-    if media.type not in {Media.Type.SERIES, Media.Type.ANIME}:
+    if media.playback_mode != Media.PlaybackMode.EPISODIC:
         return response({"detail": "Episodes can be added only to series or anime"}, 400)
 
     upload = request.FILES.get("file")
@@ -742,25 +837,37 @@ def add_admin_episode(request, media_id):
     runtime = parse_int(request.POST.get("runtime"), minimum=1)
     air_date = parse_date(request.POST.get("air_date"))
 
-    if not upload or not episode_number or not title:
-        return response({"detail": "file, title, and episode_number are required"}, 400)
+    if not upload or not episode_number:
+        return response({"detail": "Video file and episode number are required"}, 400)
+    if not title:
+        title = f"Episode {episode_number}"
 
-    season, _ = Season.objects.get_or_create(
-        media=media,
-        season_number=season_number,
-        defaults={"name": f"Season {season_number}"},
-    )
-    episode = Episode.objects.create(
-        season=season,
-        episode_number=episode_number,
-        title=title,
-        description=description or None,
-        runtime=runtime,
-        air_date=air_date,
-        file=upload,
-        status=Media.Status.PENDING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
-    )
-    return response({"episode": admin_episode_payload(episode), "message": "Episode uploaded"}, 201)
+    with transaction.atomic():
+        season, _ = Season.objects.get_or_create(
+            media=media,
+            season_number=season_number,
+            defaults={"name": f"Season {season_number}"},
+        )
+        if Episode.objects.filter(season=season, episode_number=episode_number).exists():
+            return response({
+                "detail": f"Season {season_number}, episode {episode_number} already exists"
+            }, 409)
+        episode = Episode.objects.create(
+            season=season,
+            episode_number=episode_number,
+            title=title,
+            description=description or None,
+            runtime=runtime,
+            air_date=air_date,
+            file=upload,
+            status=Media.Status.PENDING if settings.HLS_AUTO_TRANSCODE else Media.Status.READY,
+        )
+
+    episode.refresh_from_db()
+    return response({
+        "episode": admin_episode_payload(episode),
+        "message": "Episode uploaded and queued for processing",
+    }, 201)
 
 
 @login_required

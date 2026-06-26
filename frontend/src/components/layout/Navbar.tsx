@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Bell, User, ChevronDown, Tv2, Film, Compass, Sparkles, LayoutDashboard, LogOut, Menu, X, Bookmark, Heart, Clock, CheckCircle } from 'lucide-react'
+import { Search, Bell, User, ChevronDown, Tv2, Film, Compass, Sparkles, LayoutDashboard, LogOut, Menu, X, Heart, Clock, CheckCircle, Popcorn } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LanguageToggle } from '@/components/ui/LanguageToggle'
@@ -46,9 +46,9 @@ export function Navbar() {
     { href: '/', label: t.home, icon: Compass },
     { href: '/browse/movies', label: t.movies, icon: Film },
     { href: '/browse/series', label: t.series, icon: Tv2 },
-    { href: '/browse/anime', label: 'Anime', icon: Sparkles },
-    { href: '/my-list', label: 'My List', icon: Bookmark },
-    { href: '/favorites', label: 'Favorites', icon: Heart },
+    { href: '/browse/anime', label: t.anime, icon: Sparkles },
+    { href: '/browse/cartoons', label: t.cartoons, icon: Popcorn },
+    { href: '/favorites', label: t.favorites, icon: Heart },
   ]
 
   const { data: latestItems = [] } = useQuery({
@@ -146,7 +146,7 @@ export function Navbar() {
                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all relative ${
                   notificationsOpen ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/8'
                 }`}
-                aria-label="Open notifications"
+                aria-label={t.openNotifications}
               >
                 <Bell size={18} />
                 {notificationCount > 0 && (
@@ -166,14 +166,14 @@ export function Navbar() {
                     className="absolute right-0 top-full mt-2 w-80 glass-strong rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
                   >
                     <div className="px-4 py-3 border-b border-white/8">
-                      <p className="font-semibold text-sm">Notifications</p>
-                      <p className="text-xs text-white/40">Processing updates and fresh releases</p>
+                      <p className="font-semibold text-sm">{t.notifications}</p>
+                      <p className="text-xs text-white/40">{t.notificationUpdates}</p>
                     </div>
 
                     <div className="max-h-80 overflow-y-auto py-2">
                       {processingItems.length > 0 && (
                         <div className="px-2 pb-2">
-                          <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-yellow-300/70">Processing</p>
+                          <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-yellow-300/70">{t.processing}</p>
                           {processingItems.map((item: any) => (
                             <button
                               key={item.id}
@@ -188,7 +188,7 @@ export function Navbar() {
                               </span>
                               <span className="min-w-0">
                                 <span className="block truncate text-sm font-medium text-white/85">{item.title}</span>
-                                <span className="text-xs text-white/40">Still processing video qualities</span>
+                                <span className="text-xs text-white/40">{t.stillProcessing}</span>
                               </span>
                             </button>
                           ))}
@@ -196,7 +196,7 @@ export function Navbar() {
                       )}
 
                       <div className="px-2">
-                        <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-emerald-300/70">Ready to watch</p>
+                        <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-emerald-300/70">{t.readyToWatch}</p>
                         {latestItems.length > 0 ? latestItems.map((item: any) => (
                           <button
                             key={item.id}
@@ -211,11 +211,11 @@ export function Navbar() {
                             </span>
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-medium text-white/85">{item.title}</span>
-                              <span className="text-xs text-white/40">Added to the library</span>
+                              <span className="text-xs text-white/40">{t.addedToLibrary}</span>
                             </span>
                           </button>
                         )) : (
-                          <div className="px-3 py-6 text-center text-sm text-white/40">No notifications yet.</div>
+                          <div className="px-3 py-6 text-center text-sm text-white/40">{t.noNotifications}.</div>
                         )}
                       </div>
                     </div>

@@ -13,6 +13,7 @@ import {
 import Link from 'next/link'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
+import { useLanguage } from '@/lib/i18n'
 
 const GENRE_OPTIONS = [
   'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Thriller',
@@ -22,6 +23,7 @@ const GENRE_OPTIONS = [
 type UploadForm = {
   title: string
   type: string
+  playback_mode: string
   tmdb_id: string
   genres: string[]
   description: string
@@ -33,6 +35,17 @@ type UploadForm = {
 function toggleGenre(list: string[], genre: string) {
   return list.includes(genre) ? list.filter(item => item !== genre) : [...list, genre]
 }
+
+function playbackModeForType(type: string, current = 'standalone') {
+  if (type === 'series') return 'episodic'
+  if (type === 'anime') return current === 'standalone' ? 'standalone' : 'episodic'
+  return 'standalone'
+}
+
+function isEpisodicMedia(media: any) {
+  return media?.playback_mode === 'episodic'
+}
+
 function StatCard({ icon: Icon, label, value, color, delay = 0 }: any) {
   return (
     <motion.div className="glass-card p-6"
@@ -50,6 +63,7 @@ function StatCard({ icon: Icon, label, value, color, delay = 0 }: any) {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useLanguage()
   const map: Record<string, { icon: any, color: string }> = {
     ready: { icon: CheckCircle, color: 'text-emerald-400' },
     processing: { icon: Loader2, color: 'text-yellow-400' },
@@ -60,7 +74,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>
       <Icon size={12} className={status === 'processing' ? 'animate-spin' : ''} />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {status === 'ready' ? t.readyToWatch : status === 'processing' ? t.processing : status === 'pending' ? t.pending : status === 'error' ? t.error : status}
     </span>
   )
 }
@@ -70,10 +84,11 @@ export default function AdminPage() {
   const pathname = usePathname()
   const { user, isAdmin } = useAuthStore()
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
   const [tab, setTab] = useState<'overview' | 'media' | 'users' | 'upload'>('overview')
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
-  const emptyUploadForm: UploadForm = { title: '', type: 'movie', tmdb_id: '', genres: [], description: '', release_date: '', runtime: '', rating: '' }
+  const emptyUploadForm: UploadForm = { title: '', type: 'movie', playback_mode: 'standalone', tmdb_id: '', genres: [], description: '', release_date: '', runtime: '', rating: '' }
   const [uploadForm, setUploadForm] = useState(emptyUploadForm)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedPoster, setSelectedPoster] = useState<File | null>(null)
@@ -82,6 +97,7 @@ export default function AdminPage() {
   const [editForm, setEditForm] = useState({
     title: '',
     type: 'movie',
+    playback_mode: 'standalone',
     description: '',
     is_featured: false,
     poster_position_x: 50,
@@ -116,6 +132,13 @@ export default function AdminPage() {
     refetchOnWindowFocus: true,
   })
 
+  useEffect(() => {
+    if (!editingMedia) return
+    const freshMedia = adminMedia.find((item: any) => item.id === editingMedia.id)
+    if (!freshMedia) return
+    setEditingMedia((current: any) => current ? { ...current, seasons: freshMedia.seasons || [] } : current)
+  }, [adminMedia, editingMedia?.id])
+
   const toggleUser = useMutation({
     mutationFn: (id: string) => adminApi.toggleUser(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
@@ -130,6 +153,7 @@ export default function AdminPage() {
     setEditForm({
       title: media.title || '',
       type: media.type || 'movie',
+      playback_mode: media.playback_mode || playbackModeForType(media.type || 'movie'),
       description: media.description || '',
       is_featured: !!media.is_featured,
       poster_position_x: media.poster_position_x ?? 50,
@@ -150,6 +174,7 @@ export default function AdminPage() {
       const fd = new FormData()
       fd.append('title', editForm.title)
       fd.append('type', editForm.type)
+      fd.append('playback_mode', playbackModeForType(editForm.type, editForm.playback_mode))
       fd.append('description', editForm.description)
       fd.append('is_featured', editForm.is_featured ? 'true' : 'false')
       fd.append('poster_position_x', String(editForm.poster_position_x))
@@ -201,6 +226,7 @@ export default function AdminPage() {
       await mediaApi.upload(fd, {
         title: uploadForm.title,
         type: uploadForm.type,
+        playback_mode: playbackModeForType(uploadForm.type, uploadForm.playback_mode),
         tmdb_id: uploadForm.tmdb_id || undefined,
         genres: uploadForm.genres.join(',') || undefined,
         description: uploadForm.description || undefined,
@@ -224,16 +250,15 @@ export default function AdminPage() {
   }
 
   const handleAddEpisode = async () => {
-    if (!editingMedia || !episodeFile || !episodeForm.title.trim()) {
-      return toast.error('Episode title and video file are required')
-    }
+    if (!editingMedia) return
+    if (!episodeFile) return toast.error(t.episodeFileRequired)
     setEpisodeSaving(true)
     try {
       const fd = new FormData()
       fd.append('file', episodeFile)
       fd.append('season_number', episodeForm.season_number || '1')
       fd.append('episode_number', episodeForm.episode_number || '1')
-      fd.append('title', episodeForm.title)
+      fd.append('title', episodeForm.title.trim())
       fd.append('runtime', episodeForm.runtime)
       fd.append('air_date', episodeForm.air_date)
       fd.append('description', episodeForm.description)
@@ -258,7 +283,7 @@ export default function AdminPage() {
       setEpisodeProgress(0)
       setEpisodeForm({ season_number: episodeForm.season_number, episode_number: String(Number(episodeForm.episode_number || 1) + 1), title: '', runtime: '', air_date: '', description: '' })
       queryClient.invalidateQueries({ queryKey: ['admin-media'] })
-      toast.success('Episode added')
+      toast.success(t.queuedForProcessing)
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Episode upload failed')
     } finally {
@@ -283,10 +308,10 @@ export default function AdminPage() {
     }
   }
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: BarChart2 },
-    { id: 'media', label: 'Media Library', icon: Film },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'upload', label: 'Upload', icon: Upload },
+    { id: 'overview', label: t.overview, icon: BarChart2 },
+    { id: 'media', label: t.mediaLibrary, icon: Film },
+    { id: 'users', label: t.users, icon: Users },
+    { id: 'upload', label: t.upload, icon: Upload },
   ]
 
   const filteredMedia = adminMedia.filter((m: any) =>
@@ -310,12 +335,12 @@ export default function AdminPage() {
               <ArrowLeft size={16} />
             </Link>
             <div>
-              <h1 className="font-bold text-lg leading-none">Admin Dashboard</h1>
-              <p className="text-xs text-white/40">NovaStream Control Panel</p>
+              <h1 className="font-bold text-lg leading-none">{t.adminTitle}</h1>
+              <p className="text-xs text-white/40">{t.controlPanel}</p>
             </div>
           </div>
           <Link href="/admin/upload" className="btn-nova flex items-center gap-2 text-sm px-4 py-2">
-            <Plus size={15} /> Add Media
+            <Plus size={15} /> {t.addMediaButton}
           </Link>
         </div>
 
@@ -337,26 +362,26 @@ export default function AdminPage() {
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
               <div className="section-kicker mb-3">NovaStream Studio</div>
-              <h2 className="text-2xl md:text-4xl font-bold tracking-tight">Content command center</h2>
+              <h2 className="text-2xl md:text-4xl font-bold tracking-tight">{t.controlPanel}</h2>
               <p className="text-white/50 mt-2 max-w-2xl">
-                Upload films, polish posters, feature titles on the home screen, and keep your private library tidy.
+                {t.uploadTitle}. {t.mediaLibrary}.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-3 min-w-[280px]">
               <button onClick={() => setTab('upload')} className="nova-surface rounded-2xl p-4 text-left hover:border-violet-500/30 transition-all">
                 <Upload size={18} className="text-violet-300 mb-3" />
-                <p className="text-sm font-semibold">Upload</p>
-                <p className="text-xs text-white/38 mt-1">New title</p>
+                <p className="text-sm font-semibold">{t.upload}</p>
+                <p className="text-xs text-white/38 mt-1">{t.addMediaButton}</p>
               </button>
               <button onClick={() => setTab('media')} className="nova-surface rounded-2xl p-4 text-left hover:border-violet-500/30 transition-all">
                 <Film size={18} className="text-cyan-300 mb-3" />
-                <p className="text-sm font-semibold">Library</p>
-                <p className="text-xs text-white/38 mt-1">Edit media</p>
+                <p className="text-sm font-semibold">{t.mediaLibrary}</p>
+                <p className="text-xs text-white/38 mt-1">{t.saveChanges}</p>
               </button>
               <button onClick={() => setTab('users')} className="nova-surface rounded-2xl p-4 text-left hover:border-violet-500/30 transition-all">
                 <Users size={18} className="text-emerald-300 mb-3" />
-                <p className="text-sm font-semibold">Users</p>
-                <p className="text-xs text-white/38 mt-1">Access</p>
+                <p className="text-sm font-semibold">{t.users}</p>
+                <p className="text-xs text-white/38 mt-1">{t.actions}</p>
               </button>
             </div>
           </div>
@@ -366,10 +391,10 @@ export default function AdminPage() {
         {tab === 'overview' && (
           <div className="space-y-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard icon={Users} label="Total Users" value={stats?.users?.total} color="bg-violet-600/20" delay={0} />
-              <StatCard icon={Film} label="Total Media" value={stats?.media?.total} color="bg-cyan-600/20" delay={0.1} />
-              <StatCard icon={CheckCircle} label="Ready to Stream" value={stats?.media?.ready} color="bg-emerald-600/20" delay={0.2} />
-              <StatCard icon={Eye} label="Views This Week" value={stats?.activity?.watches_this_week} color="bg-amber-600/20" delay={0.3} />
+              <StatCard icon={Users} label={t.totalUsers} value={stats?.users?.total} color="bg-violet-600/20" delay={0} />
+              <StatCard icon={Film} label={t.totalMedia} value={stats?.media?.total} color="bg-cyan-600/20" delay={0.1} />
+              <StatCard icon={CheckCircle} label={t.readyToStream} value={stats?.media?.ready} color="bg-emerald-600/20" delay={0.2} />
+              <StatCard icon={Eye} label={t.viewsThisWeek} value={stats?.activity?.watches_this_week} color="bg-amber-600/20" delay={0.3} />
             </div>
 
             {stats?.media?.processing > 0 && (
@@ -384,19 +409,19 @@ export default function AdminPage() {
 
             {/* Quick stats graph placeholder */}
             <div className="glass-card p-6">
-              <h3 className="font-bold mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-violet-400" /> Platform Activity</h3>
+              <h3 className="font-bold mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-violet-400" /> {t.platformActivity}</h3>
               <div className="grid grid-cols-3 gap-6 text-center">
                 <div>
                   <p className="text-3xl font-bold text-violet-400">{stats?.media?.ready || 0}</p>
-                  <p className="text-xs text-white/50 mt-1">Streamable titles</p>
+                  <p className="text-xs text-white/50 mt-1">{t.readyToStream}</p>
                 </div>
                 <div>
                   <p className="text-3xl font-bold text-blue-400">{stats?.users?.total || 0}</p>
-                  <p className="text-xs text-white/50 mt-1">Registered users</p>
+                  <p className="text-xs text-white/50 mt-1">{t.totalUsers}</p>
                 </div>
                 <div>
                   <p className="text-3xl font-bold text-emerald-400">{stats?.activity?.watches_this_week || 0}</p>
-                  <p className="text-xs text-white/50 mt-1">Watches this week</p>
+                  <p className="text-xs text-white/50 mt-1">{t.viewsThisWeek}</p>
                 </div>
               </div>
             </div>
@@ -410,14 +435,14 @@ export default function AdminPage() {
               <div className="flex-1 relative">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Search media..."
+                  placeholder={t.searchMedia}
                   className="w-full bg-white/[0.06] border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/50 transition-all" />
               </div>
               <button
                 type="button"
                 onClick={() => refetchAdminMedia()}
                 className="h-10 w-10 rounded-xl border border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10] hover:text-white transition-all flex items-center justify-center"
-                title="Refresh media statuses"
+                title={t.refreshStatuses}
               >
                 <RefreshCw size={16} className={adminMediaFetching ? 'animate-spin' : ''} />
               </button>
@@ -428,11 +453,11 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/[0.08]">
-                      <th className="text-left px-5 py-3.5 text-white/50 font-medium">Title</th>
-                      <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden md:table-cell">Type</th>
-                      <th className="text-left px-4 py-3.5 text-white/50 font-medium">Status</th>
-                      <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden lg:table-cell">Added</th>
-                      <th className="px-4 py-3.5 text-white/50 font-medium text-right">Actions</th>
+                      <th className="text-left px-5 py-3.5 text-white/50 font-medium">{t.title}</th>
+                      <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden md:table-cell">{t.type}</th>
+                      <th className="text-left px-4 py-3.5 text-white/50 font-medium">{t.status}</th>
+                      <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden lg:table-cell">{t.added}</th>
+                      <th className="px-4 py-3.5 text-white/50 font-medium text-right">{t.actions}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -498,9 +523,9 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.08]">
-                    <th className="text-left px-5 py-3.5 text-white/50 font-medium">User</th>
+                    <th className="text-left px-5 py-3.5 text-white/50 font-medium">{t.users}</th>
                     <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden md:table-cell">Role</th>
-                    <th className="text-left px-4 py-3.5 text-white/50 font-medium">Status</th>
+                    <th className="text-left px-4 py-3.5 text-white/50 font-medium">{t.status}</th>
                     <th className="text-left px-4 py-3.5 text-white/50 font-medium hidden lg:table-cell">Joined</th>
                     <th className="px-4 py-3.5 text-right text-white/50 font-medium">Toggle</th>
                   </tr>
@@ -554,7 +579,7 @@ export default function AdminPage() {
 
             <div className="glass-card p-6 space-y-5">
               <div>
-                <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Title</label>
+                <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.title}</label>
                 <input value={uploadForm.title} onChange={e => setUploadForm({...uploadForm, title: e.target.value})}
                   placeholder="e.g. Inception"
                   className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-sm text-white caret-violet-200 placeholder-white/30 outline-none focus:border-violet-500/60 transition-all" />
@@ -562,22 +587,49 @@ export default function AdminPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Type</label>
-                  <select value={uploadForm.type} onChange={e => setUploadForm({...uploadForm, type: e.target.value})}
+                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.type}</label>
+                  <select value={uploadForm.type} onChange={e => {
+                    const nextType = e.target.value
+                    setUploadForm({...uploadForm, type: nextType, playback_mode: playbackModeForType(nextType, uploadForm.playback_mode)})
+                  }}
                     className="w-full bg-[#11162a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500/60 transition-all">
-                    <option className="bg-[#11162a] text-white" value="movie">Movie</option>
-                    <option className="bg-[#11162a] text-white" value="series">Series</option>
-                    <option className="bg-[#11162a] text-white" value="documentary">Documentary</option>
-                    <option className="bg-[#11162a] text-white" value="anime">Anime</option>
+                    <option className="bg-[#11162a] text-white" value="movie">{t.movies}</option>
+                    <option className="bg-[#11162a] text-white" value="series">{t.series}</option>
+                    <option className="bg-[#11162a] text-white" value="documentary">{t.documentaries}</option>
+                    <option className="bg-[#11162a] text-white" value="anime">{t.anime}</option>
+                    <option className="bg-[#11162a] text-white" value="cartoon">{t.cartoons}</option>
                   </select>
                 </div>
+                {uploadForm.type === 'anime' ? (
+                  <div>
+                    <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.playbackMode}</label>
+                    <select
+                      value={uploadForm.playback_mode}
+                      onChange={e => setUploadForm({...uploadForm, playback_mode: e.target.value})}
+                      className="w-full bg-[#11162a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500/60 transition-all"
+                    >
+                      <option className="bg-[#11162a] text-white" value="standalone">{t.standaloneVideo}</option>
+                      <option className="bg-[#11162a] text-white" value="episodic">{t.episodicVideo}</option>
+                    </select>
+                  </div>
+                ) : (
                 <div>
-                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">TMDB ID (optional)</label>
+                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.tmdbId}</label>
                   <input value={uploadForm.tmdb_id} onChange={e => setUploadForm({...uploadForm, tmdb_id: e.target.value})}
                     placeholder="e.g. 27205"
                     className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-sm text-white caret-violet-200 placeholder-white/30 outline-none focus:border-violet-500/60 transition-all" />
                 </div>
+                )}
               </div>
+
+              {uploadForm.type === 'anime' && (
+                <div>
+                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.tmdbId}</label>
+                  <input value={uploadForm.tmdb_id} onChange={e => setUploadForm({...uploadForm, tmdb_id: e.target.value})}
+                    placeholder="e.g. 27205"
+                    className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-sm text-white caret-violet-200 placeholder-white/30 outline-none focus:border-violet-500/60 transition-all" />
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-white/60 mb-2 uppercase tracking-wide">Genres</label>
@@ -717,7 +769,7 @@ export default function AdminPage() {
               <motion.button onClick={handleUpload} disabled={!selectedFile || uploading || !uploadForm.title}
                 className="btn-nova w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-                {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload & Process</>}
+                {uploading ? <><Loader2 size={16} className="animate-spin" /> {t.upload}...</> : <><Upload size={16} /> {t.uploadAndProcess}</>}
               </motion.button>
             </div>
           </div>
@@ -805,22 +857,42 @@ export default function AdminPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Title</label>
+                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.title}</label>
                   <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})}
                     className="w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-sm text-white caret-violet-200 outline-none focus:border-violet-500/60 transition-all" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Type</label>
-                    <select value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}
+                    <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.type}</label>
+                    <select value={editForm.type} onChange={e => {
+                      const nextType = e.target.value
+                      setEditForm({...editForm, type: nextType, playback_mode: playbackModeForType(nextType, editForm.playback_mode)})
+                    }}
                       className="w-full bg-[#11162a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500/60 transition-all">
-                      <option className="bg-[#11162a] text-white" value="movie">Movie</option>
-                      <option className="bg-[#11162a] text-white" value="series">Series</option>
-                      <option className="bg-[#11162a] text-white" value="documentary">Documentary</option>
-                      <option className="bg-[#11162a] text-white" value="anime">Anime</option>
+                      <option className="bg-[#11162a] text-white" value="movie">{t.movies}</option>
+                      <option className="bg-[#11162a] text-white" value="series">{t.series}</option>
+                      <option className="bg-[#11162a] text-white" value="documentary">{t.documentaries}</option>
+                      <option className="bg-[#11162a] text-white" value="anime">{t.anime}</option>
+                      <option className="bg-[#11162a] text-white" value="cartoon">{t.cartoons}</option>
                     </select>
                   </div>
+                  {editForm.type === 'anime' && (
+                    <div>
+                      <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.playbackMode}</label>
+                      <select
+                        value={editForm.playback_mode}
+                        onChange={e => setEditForm({...editForm, playback_mode: e.target.value})}
+                        className="w-full bg-[#11162a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500/60 transition-all"
+                      >
+                        <option className="bg-[#11162a] text-white" value="standalone">{t.standaloneVideo}</option>
+                        <option className="bg-[#11162a] text-white" value="episodic">{t.episodicVideo}</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
                   <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-4 mt-6 cursor-pointer hover:bg-white/[0.08] transition-all">
                     <input
                       type="checkbox"
@@ -851,7 +923,7 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Description</label>
+                  <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.description}</label>
                   <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})}
                     rows={5}
                     placeholder="Short movie description..."
@@ -896,11 +968,11 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {(editingMedia.type === 'series' || editingMedia.type === 'anime') && (
+                {isEpisodicMedia(editingMedia) && (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 space-y-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-white">Episodes</h3>
+                        <h3 className="text-sm font-semibold text-white">{t.episodes}</h3>
                         <p className="text-xs text-white/40">Add new episodes to this {editingMedia.type === 'anime' ? 'anime' : 'series'} without creating a new media item.</p>
                       </div>
                       <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/55">
@@ -911,7 +983,7 @@ export default function AdminPage() {
                     <div className="space-y-3">
                       {(editingMedia.seasons || []).length === 0 ? (
                         <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-4 py-5 text-sm text-white/40">
-                          No episodes yet.
+                          {t.noEpisodes}.
                         </div>
                       ) : (
                         [...(editingMedia.seasons || [])]
@@ -941,6 +1013,14 @@ export default function AdminPage() {
                                           {episode.air_date ? <span>{episode.air_date}</span> : null}
                                           <StatusBadge status={episode.status || 'pending'} />
                                         </div>
+                                        {episode.file_name && (
+                                          <p className="mt-1 truncate text-[11px] text-white/35">
+                                            {t.uploadedFile}: {episode.file_name}
+                                          </p>
+                                        )}
+                                        {episode.error_message && (
+                                          <p className="mt-1 text-xs text-red-300/80">{episode.error_message}</p>
+                                        )}
                                       </div>
                                       <button
                                         type="button"
@@ -961,7 +1041,7 @@ export default function AdminPage() {
                     <div className="border-t border-white/10 pt-4 space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Season</label>
+                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.season}</label>
                           <input
                             type="number"
                             min="1"
@@ -971,7 +1051,7 @@ export default function AdminPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Episode</label>
+                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.episode}</label>
                           <input
                             type="number"
                             min="1"
@@ -981,7 +1061,7 @@ export default function AdminPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Runtime</label>
+                          <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.runtime}</label>
                           <input
                             type="number"
                             min="1"
@@ -1003,17 +1083,20 @@ export default function AdminPage() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Episode title</label>
+                        <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.episodeTitle}</label>
                         <input
                           value={episodeForm.title}
                           onChange={e => setEpisodeForm({...episodeForm, title: e.target.value})}
-                          placeholder="Pilot"
+                          placeholder={`${t.episode} ${episodeForm.episode_number || '1'}`}
                           className="w-full bg-[#11162a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/60 transition-all"
                         />
+                        {!episodeForm.title.trim() && (
+                          <p className="mt-1.5 text-xs text-white/35">{t.autoEpisodeTitle}</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">Episode description</label>
+                        <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wide">{t.episodeDescription}</label>
                         <textarea
                           rows={3}
                           value={episodeForm.description}
@@ -1044,7 +1127,7 @@ export default function AdminPage() {
                           className="btn-nova flex min-h-[46px] items-center justify-center gap-2 px-5 py-2 disabled:opacity-50"
                         >
                           {episodeSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                          Add Episode
+                          {t.addEpisode}
                         </button>
                       </div>
 
@@ -1066,12 +1149,12 @@ export default function AdminPage() {
                 <div className="flex justify-end gap-3 pt-2">
                   <button onClick={() => setEditingMedia(null)}
                     className="px-4 py-2 rounded-xl text-sm font-semibold text-white/60 hover:text-white hover:bg-white/[0.08] transition-all">
-                    Cancel
+                    {t.cancel}
                   </button>
                   <button onClick={handleEditSave} disabled={editSaving}
                     className="btn-nova flex items-center gap-2 px-5 py-2 disabled:opacity-50">
                     {editSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Save Changes
+                    {t.saveChanges}
                   </button>
                 </div>
               </div>

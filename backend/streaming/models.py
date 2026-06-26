@@ -49,6 +49,7 @@ class Media(models.Model):
         SERIES = "series", "Series"
         DOCUMENTARY = "documentary", "Documentary"
         ANIME = "anime", "Anime"
+        CARTOON = "cartoon", "Cartoon"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -56,10 +57,15 @@ class Media(models.Model):
         READY = "ready", "Ready"
         ERROR = "error", "Error"
 
+    class PlaybackMode(models.TextChoices):
+        STANDALONE = "standalone", "Standalone"
+        EPISODIC = "episodic", "Episodic"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=500, db_index=True)
     original_title = models.CharField(max_length=500, blank=True, null=True)
     type = models.CharField(max_length=20, choices=Type.choices)
+    playback_mode = models.CharField(max_length=20, choices=PlaybackMode.choices, default=PlaybackMode.STANDALONE)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     description = models.TextField(blank=True, null=True)
     tagline = models.CharField(max_length=500, blank=True, null=True)
@@ -121,6 +127,9 @@ class Episode(models.Model):
     hls_path = models.CharField(max_length=1000, blank=True, null=True)
     duration = models.FloatField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=Media.Status.choices, default=Media.Status.PENDING)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["episode_number"]

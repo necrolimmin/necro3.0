@@ -84,9 +84,9 @@ export function HeroBanner({ items }: HeroBannerProps) {
             >
               {/* Badge */}
               <div className="flex items-center gap-3 mb-4">
-                <span className="section-kicker">Featured</span>
+                <span className="section-kicker">{t.featured}</span>
                 <span className="badge badge-nova">
-                  {item.type === 'series' ? t.series : item.type === 'documentary' ? t.documentary : t.movie}
+                  {item.type === 'series' ? t.series : item.type === 'documentary' ? t.documentary : item.type === 'anime' ? t.anime : item.type === 'cartoon' ? t.cartoons : t.movie}
                 </span>
                 {item.genres.slice(0, 2).map(g => (
                   <span key={g} className="text-xs text-white/50 font-medium">{g}</span>

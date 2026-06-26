@@ -7,6 +7,18 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+let refreshPromise: Promise<string> | null = null
+
+function expireSession() {
+  localStorage.removeItem('nova_token')
+  localStorage.removeItem('nova_refresh')
+  localStorage.removeItem('nova-auth')
+
+  if (window.location.pathname !== '/login') {
+    window.location.replace('/login')
+  }
+}
+
 // Attach token
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
@@ -20,24 +32,36 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   async (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const config = error.config as (typeof error.config & { _retry?: boolean }) | undefined
+
+    if (error.response?.status === 401 && typeof window !== 'undefined' && config && !config._retry) {
+      config._retry = true
       const refresh = localStorage.getItem('nova_refresh')
+
       if (refresh) {
         try {
-          const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { refresh_token: refresh })
-          localStorage.setItem('nova_token', data.access_token)
-          localStorage.setItem('nova_refresh', data.refresh_token)
-          error.config.headers.Authorization = `Bearer ${data.access_token}`
-          return api.request(error.config)
+          refreshPromise ||= axios
+            .post(`${API_URL}/api/v1/auth/refresh`, { refresh_token: refresh })
+            .then(({ data }) => {
+              localStorage.setItem('nova_token', data.access_token)
+              localStorage.setItem('nova_refresh', data.refresh_token)
+              return data.access_token as string
+            })
+            .finally(() => {
+              refreshPromise = null
+            })
+
+          const accessToken = await refreshPromise
+          config.headers.Authorization = `Bearer ${accessToken}`
+          return api.request(config)
         } catch {
-          localStorage.clear()
-          window.location.href = '/login'
+          expireSession()
         }
       } else {
-        localStorage.clear()
-        window.location.href = '/login'
+        expireSession()
       }
     }
+
     return Promise.reject(error)
   }
 )
@@ -88,13 +112,6 @@ export const favoritesApi = {
   status: (id: string) => api.get(`/favorites/${id}`),
   add: (id: string) => api.post(`/favorites/${id}`),
   remove: (id: string) => api.delete(`/favorites/${id}`),
-}
-// Watchlist
-export const watchlistApi = {
-  list: () => api.get('/watchlist/'),
-  status: (id: string) => api.get(`/watchlist/${id}`),
-  add: (id: string) => api.post(`/watchlist/${id}`),
-  remove: (id: string) => api.delete(`/watchlist/${id}`),
 }
 // Admin
 export const adminApi = {
